@@ -101,7 +101,7 @@ export default async function handler(req, res) {
         name,
         photo,
         description,
-        verified: $(".tgme_page_verified").length > 0,
+        verified: $(".verified-icon").length > 0,
         restricted: $(".tgme_page_restricted").length > 0,
         fake: $(".tgme_page_fake").length > 0,
         scam: $(".tgme_page_scam").length > 0,
