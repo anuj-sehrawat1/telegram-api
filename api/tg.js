@@ -8,23 +8,29 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "username query param required" });
   }
 
+  const url = `https://t.me/${username}`;
+
   try {
-    const url = `https://t.me/${username}`;
     const { data } = await axios.get(url, {
+      maxRedirects: 5,
+      timeout: 10000,
       headers: {
-        "User-Agent": "Mozilla/5.0"
-      }
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120",
+        Accept: "text/html",
+      },
     });
+
     const $ = cheerio.load(data);
 
-    // Common fields
+    // Basic fields
     const name =
       $(".tgme_page_title span").text().trim() ||
       $('meta[property="og:title"]').attr("content") ||
       null;
 
     const profilePic =
-      $(".tgme_page_photo_image").attr("src") ||
+      $(".tgme_page_photo_image img").attr("src") ||
       $('meta[property="og:image"]').attr("content") ||
       null;
 
@@ -34,37 +40,32 @@ export default async function handler(req, res) {
       null;
 
     const extras = $(".tgme_page_extra")
-      .map((i, el) => $(el).text().trim())
+      .map((_, el) => $(el).text().trim())
       .get();
 
     let type = "user";
     let subscribers = null;
-    let usernameText = null;
     let monthlyUsers = null;
 
-    if (extras.length > 0) {
-      // bot
-      if (extras[0].startsWith("@") && extras.length > 1) {
-        type = "bot";
-        usernameText = extras[0];
-        monthlyUsers = extras[1];
-      }
-      // channel
-      else if (extras[0].match(/subscribers|members/i)) {
+    for (const text of extras) {
+      if (/subscribers|members/i.test(text)) {
         type = "channel";
-        subscribers = extras[0];
+        subscribers = text.match(/\d[\d\s]*/)?.[0]?.replace(/\s/g, "") || null;
       }
-      // normal user
-      else {
-        type = "user";
-        usernameText = extras[0];
+
+      if (/monthly users/i.test(text)) {
+        type = "bot";
+        monthlyUsers = text.match(/\d[\d\s]*/)?.[0]?.replace(/\s/g, "") || null;
       }
     }
 
+    if (url.includes("/bot")) type = "bot";
+
     return res.status(200).json({
+      success: true,
       type,
       name,
-      username: usernameText,
+      username: `@${username}`,
       subscribers,
       monthlyUsers,
       description,
@@ -72,7 +73,9 @@ export default async function handler(req, res) {
       sourceUrl: url,
     });
   } catch (err) {
-    console.error(err.message);
-    return res.status(500).json({ error: "Failed to scrape profile" });
+    return res.status(404).json({
+      success: false,
+      error: "Profile not found or private",
+    });
   }
-                                     }
+}
